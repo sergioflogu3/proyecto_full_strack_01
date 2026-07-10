@@ -1,0 +1,53 @@
+services:
+
+  # ── PostgreSQL ────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: taskflow_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_dev
+      POSTGRES_DB: taskflow_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      retries: 5
+
+  # ── Backend ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./taskflow-api
+    container_name: taskflow_backend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres_dev@db:5432/taskflow_db
+      JWT_SECRET: taskflow_dev_secret_change_in_production_min_32chars
+      JWT_EXPIRES_IN: 7d
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Frontend ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./taskflow-web
+      args:
+        VITE_API_URL: http://localhost:3000
+    container_name: taskflow_frontend
+    restart: unless-stopped
+    ports:
+      - '5174:80'
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
